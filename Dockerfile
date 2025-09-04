@@ -1,25 +1,32 @@
-# Simple, reliable: build and run in one image with Yarn
+# Build + run in one image with Yarn
 FROM node:20-alpine
 
-# Ensure Yarn via Corepack and use node_modules linker (works for Yarn v1 & v3+)
+# Enable Yarn via Corepack (bundled with Node 20)
 RUN corepack enable
+
+# For Yarn 2+/3+, make sure we use node_modules (no PnP)
 ENV YARN_NODE_LINKER=node-modules
 
 WORKDIR /app
 
-# Copy only manifests for better Docker layer caching
+# Copy only manifests first for better caching
 COPY package.json yarn.lock ./
-# If you have Yarn Berry config, keep these too (safe to copy even if absent)
+# Copy Yarn Berry config if present; this wildcard won't fail if absent
 COPY .yarnrc.yml* ./
-COPY .yarn/ .yarn/
 
-# Install deps using the lockfile (works with Yarn v1: --frozen-lockfile, Yarn v3+: --immutable)
-RUN if [ -f .yarnrc.yml ]; then corepack yarn install --immutable; else corepack yarn install --frozen-lockfile; fi
+# Install deps using the lockfile:
+# - Yarn v3+: --immutable
+# - Yarn v1:  --frozen-lockfile
+RUN if [ -f .yarnrc.yml ]; then \
+      corepack yarn install --immutable; \
+    else \
+      corepack yarn install --frozen-lockfile; \
+    fi
 
-# Copy the rest of the source
+# Now copy the rest of your source (no .yarn/ copy needed)
 COPY . .
 
-# Build Medusa’s production bundle
+# Build Medusa production bundle
 RUN npx medusa build
 
 ENV NODE_ENV=production
